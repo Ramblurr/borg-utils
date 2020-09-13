@@ -1,0 +1,42 @@
+[borg_cloner]
+# reserved for future use
+
+[borgbase]
+
+# your bb api toiken
+bb_token = ....
+
+# create a new ssh key in borg base used only for rsyncing, get the key id using the api or browser inspector
+bb_rsync_key_id = 1234
+
+# bb will alert you after this many days if the remote repo doesn't change
+bb_alert_days = 14
+
+
+[example]
+# every other config section is a repo or set of repos to backup
+# repos to backup
+
+# the name of remote repos will be prefixed with this
+prefix = example-
+
+# local path on disk to the rsync ssh key referenced in borgbase section above
+ssh_key_path = /root/.ssh/id_ed25519
+
+# path to the borg repo or the directory containing multiple borg repos
+path = /mnt/tank/example/backups/borg_repos/
+
+# comma seperated list of repos to NOT backup to borgbase
+ignorelist = apptest,foobar
+
+[work]
+prefix = work-
+ssh_key_path = /root/.ssh/id_ed25519
+path = /mnt/tank/work/backups/borg_repos/
+ignorelist = apptest,foobar
+
+[family]
+prefix = family-
+ssh_key_path = /root/.ssh/id_ed25519_2
+path = /mnt/tank/family-backup/
+ignorelist = private-stuff,

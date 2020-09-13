@@ -1,0 +1,18 @@
+[borg_repo_exporter]
+# reserved for future use
+
+# every other config section is a repo or set of repos to backup
+# repos to backup
+
+[work]
+# the borg encryption passphrase
+passphrase = ...
+path = /mnt/tank/work/backups/borg_repos/
+ignorelist = apptest
+prefix = work-
+
+[family]
+passphrase = ...
+path = /mnt/tank/family-backup/
+prefix = family-
+ignorelist = private-stuff
