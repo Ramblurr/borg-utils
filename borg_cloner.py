@@ -164,7 +164,7 @@ def rsync_repo(identity_file, local_repo, remote_repo_no_path):
         local_repo,
         "rsync",
         "-Paz",
-        "--delete-before",
+        "--delete-after",
         "--stats",
         "-i",
         identity_file,
