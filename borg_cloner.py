@@ -194,12 +194,26 @@ def rsync_repo(identity_file, local_repo, remote_repo_no_path):
     subprocess.check_call(args)
 
 
+def tofu_repo(host):
+    bash = subprocess.check_output(["/usr/bin/which", "bash"]).strip()
+    logging.debug(f"found bash at {bash}")
+    script = f"""
+    if ! ssh-keygen -F {host}; then
+      ssh-keyscan {host}>> ~/.ssh/known_hosts
+      exit 255
+    fi"""
+    out = subprocess.check_output(script, shell=True, executable=bash)
+    logging.debug(out)
+
+
 def rsync_repos(ssh_key_path, repos):
     for repo in repos:
         local_repo = repo["path"]
         remote_repo_path = repo["remote_repo_path"]
         rpath = repo["remote_repo_path"]
         remote_repo_no_path = rpath[0 : rpath.rfind(":") + 1]
+        host =  remote_repo_no_path[remote_repo_no_path.rfind("@") + 1:-1]
+        tofu_repo(host)
         rsync_repo(ssh_key_path, local_repo, remote_repo_no_path)
 
 
