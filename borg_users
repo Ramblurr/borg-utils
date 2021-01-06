@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename $0)
+
+DEFAULT_DEST=$(realpath "${BORG_USER_DEST_DIR:-/mnt/backup/borg_repos}")
+
+
+create() {
+    username="$1"
+
+    if [[ -z "$username" ]]; then
+        echo "Usage: $SCRIPT_NAME create USER"
+        exit 0
+    fi
+
+    mkdir -p $DEFAULT_DEST
+    home="$DEFAULT_DEST"/"$username"
+    if getent passwd "$username" > /dev/null 2>&1; then
+        echo user already exists
+        exit 1
+    fi
+    echo "$username::::::Borg Backup User:$home:/bin/sh:" | adduser  -w no -G borgusers   -f
+
+    mkdir -p $home/.ssh
+    chmod 700 $home/.ssh
+    chown "${username}:${username}" $home/.ssh
+    touch $home/.ssh/authorized_keys
+    chown "${username}:${username}" $home/.ssh/authorized_keys
+    chmod 600 $home/.ssh/authorized_keys
+}
+
+addkey() {
+    username="$1"
+    shift
+    pubkey="$@"
+
+    if [[ -z "$username" || -z "$pubkey" ]]; then
+        echo "Usage: $SCRIPT_NAME addkey USER PUBKEY"
+        exit 0
+    fi
+    if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
+       echo invalid user
+       exit 1
+    fi
+    home=$(realpath "$DEFAULT_DEST"/"$username")
+    restriction="command=\"borg serve --restrict-to-path $home\",restrict "
+    auth_key_line="$restriction $pubkey"
+    echo "$auth_key_line" >> $home/.ssh/authorized_keys
+    chown -R "${username}:${username}" $home
+}
+
+_delkeyline() {
+    auth_keys="$1"
+    line="$2"
+
+python3.7 - <<EOF
+import fileinput
+
+fname = '$auth_keys'.rstrip()
+pattern = '$line'.rstrip()
+
+for line in fileinput.input(fname, inplace=True):
+    if pattern not in line.rstrip():
+        print('{}'.format(line), end='')
+EOF
+}
+
+_listkeys() {
+    auth_keys="$1"
+    cat $auth_keys | cut -d\  -f5-
+}
+
+delkey() {
+    username="${1:-}"
+    pubkey_num="${2:}"
+
+    if [[ -z "$username" ]]; then
+        echo "Usage: $SCRIPT_NAME delkey USER [num]"
+	echo         to get num use $SCRIPT_NAME listkeys
+        exit 0
+    fi
+    if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
+       echo invalid user
+       exit 1
+    fi
+    auth_keys=$(realpath "$DEFAULT_DEST"/"$username"/.ssh/authorized_keys)
+    if (( "$(grep -ch "^" "$auth_keys")" == 0 )); then
+        echo "$username has no pubkeys."
+        exit 0
+    fi 
+    if [[ -z "$pubkey_num" ]]; then
+
+        IFS=$'\n'
+        PS3="Pubkey to delete (number or any other to abort): "
+        select line in `_listkeys $auth_keys`; do
+            _delkeyline "$auth_keys" "$line"
+            break
+        done
+        unset IFS
+    else
+        line=$(sed "${pubkey_num}q;d" $auth_keys)
+	echo chose $pubkey_num: $line
+        _delkeylines "$auth_keys" "$line"
+    fi
+}
+
+listkeys() {
+    username="${1:-}"
+
+    if [[ -z "$username" ]]; then
+        echo "Usage: $SCRIPT_NAME listkeys USER"
+        exit 0
+    fi
+    if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
+       echo invalid user
+       exit 1
+    fi
+    auth_keys=$(realpath "$DEFAULT_DEST"/"$username"/.ssh/authorized_keys)
+    _listkeys "$auth_keys" | nl
+}
+
+delete() {
+    if [ "$(id -u)" != "0" ]; then
+        echo "delete is only available to a local root user as a security precaution"
+        exit 1
+    fi
+    username="${1:-}"
+
+    if [[ -z "$username" ]]; then
+        echo "Usage: $SCRIPT_NAME delete USER"
+        exit 0
+    fi
+
+    if [[ -d $DEFAULT_DEST/"$username" ]]; then
+        rmuser "$username"
+    else
+        echo invalid user
+        exit 1
+    fi
+}
+
+list() {
+    arg="${1:-}"
+    if [[ ! -z "$arg" ]]; then
+        find "$DEFAULT_DEST" -maxdepth 1 -name "$arg" | xargs basename
+    else
+        ls -1 "$DEFAULT_DEST"
+    fi
+}
+
+
+
+arg="${1:-}"
+if [[ "$arg" == "$(basename $0)" ]]; then
+    shift
+fi
+arg="${1:-}"
+case "$arg" in
+    create)  shift; create ${@};;
+    delete)  shift; delete ${@};;
+    ls|list) shift;   list ${@};;
+    addkey)  shift; addkey ${@};;
+    delkey)  shift; delkey ${@};;
+    listkeys)  shift; listkeys ${@};;
+    *)
+        echo "Usage: $SCRIPT_NAME COMMAND"
+        echo ""
+        echo "COMMAND: create|delete|list|addkey|delkey|listkeys"
+        echo ""
+        echo "   create: Create a new user."
+        echo "   delete: Delete a user and all its files."
+        echo "   ls|list: List existing users."
+        echo
+        echo "   addkey: Add a pubkey to authorized_keys for a user."
+        echo "   delkey: Delete apubkey to authorized_keys for a user."
+        echo "   listkeys: List all pubkeys for a user."
+        exit 0
+    ;;
+esac
