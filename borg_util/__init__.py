@@ -22,4 +22,3 @@ def enumerate_repos(path, ignorelist):
         if is_borg_repo(repo_path2):
             repos.append({"name": dir, "path": repo_path2})
     return repos
-
