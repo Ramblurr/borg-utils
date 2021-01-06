@@ -202,8 +202,12 @@ def tofu_repo(host):
       ssh-keyscan {host}>> ~/.ssh/known_hosts
       exit 255
     fi"""
-    out = subprocess.check_output(script, shell=True, executable=bash)
-    logging.debug(out)
+    try:
+        out = subprocess.check_output(script, shell=True, executable=bash)
+        logging.debug(out)
+    except subprocess.CalledProcessError as err:
+        if err.returncode != 255:
+            raise err
 
 
 def rsync_repos(ssh_key_path, repos):
@@ -212,7 +216,7 @@ def rsync_repos(ssh_key_path, repos):
         remote_repo_path = repo["remote_repo_path"]
         rpath = repo["remote_repo_path"]
         remote_repo_no_path = rpath[0 : rpath.rfind(":") + 1]
-        host =  remote_repo_no_path[remote_repo_no_path.rfind("@") + 1:-1]
+        host = remote_repo_no_path[remote_repo_no_path.rfind("@") + 1 : -1]
         tofu_repo(host)
         rsync_repo(ssh_key_path, local_repo, remote_repo_no_path)
 
