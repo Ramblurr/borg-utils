@@ -1,5 +1,9 @@
 # borg-utils
 
+A collection of python scripts and utils for working with borgbackup repositories.
+
+## scripts
+
 * **`borg_cloner.py`** - Clone a set of local borg repos to a remote source, like borgbase.com. Useful when you have a bunch of nodes backing up to an onsite NAS, but then you want to ship the repos offsite. Uses repo locking to prevent race conditions. Beware ransomware, use append only mode.
 
 
@@ -11,7 +15,6 @@ Both use their own config file, see included samples.
 
 These tools were developed for in house work and work well enough as they are.
 They probably will not work out of the box for you.
-may 
 
 # License
 

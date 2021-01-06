@@ -3,12 +3,20 @@ import os.path
 
 
 def is_borg_repo(path):
+    """
+    Uses a simple heuristic to determine if a path contains
+    borg repository data.
+    """
     return os.path.isfile(os.path.join(path, "config")) and os.path.isdir(
         os.path.join(path, "data")
     )
 
 
 def enumerate_repos(path, ignorelist):
+    """
+    Given a path, attempts to enumerate the borg repositories in or under that path.
+    Returns a list of dictionaries with keys: name, path
+    """
     dirs = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
     repos = []
     for dir in dirs:
