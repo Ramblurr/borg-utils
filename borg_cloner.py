@@ -17,9 +17,9 @@ from borg_util import is_borg_repo, enumerate_repos
 
 def bb_list_repos(client):
     """
-    Given a repository name, see if a repository with this name already exists.
-    :param name: the name to search for
-    :returns: returns True if repo with name exists, False otherwise
+    Get a list of repos
+    :param client: borgbase graphql client
+    :returns: returns a list of repositories
     """
     query = """
     {
@@ -34,36 +34,26 @@ def bb_list_repos(client):
     return res["data"]["repoList"]
 
 
-def bb_repo_exists(client, name):
+def bb_repo(client, name):
     """
     Given a repository name, see if a repository with this name already exists.
+    :param client: borgbase graphql client
     :param name: the name to search for
-    :returns: returns True if repo with name exists, False otherwise
+    :returns: returns the repository info
     """
-    query = """
-    {
-      repoList {
-        id
-        name
-      }
-    }
-    """
-
-    res = client.execute(query)
-    for repo in res["data"]["repoList"]:
-        if repo["name"] == name:
-            return True
-
-    return False
-
-
-def bb_repo_path(client, name):
     query = """
     {
       repoList {
         id
         name
         repoPath
+        id
+        quota
+        quotaEnabled
+        lastModified
+        currentUsage
+        rsyncKeys
+        alertDays
       }
     }
     """
@@ -71,11 +61,18 @@ def bb_repo_path(client, name):
     res = client.execute(query)
     for repo in res["data"]["repoList"]:
         if repo["name"] == name:
-            return repo["repoPath"]
+            return repo
+
     return None
 
 
 def bb_create_repo(bb, name):
+    """
+    Creates and configures a repo
+    :param client: borgbase graphql client
+    :param name: the name of the repo to create
+    :returns: returns the repository path
+    """
     new_repo_vars = {
         "name": name,
         "quotaEnabled": False,
@@ -123,19 +120,84 @@ def bb_create_repo(bb, name):
     return new_repo_path
 
 
+def bb_update_settings(bb, name, repo):
+    """
+    Updates the settings for a repo
+    :param client: borgbase graphql client
+    :param name: the name of the repo to create
+    :param repo: the repo data
+    :returns: returns the repo info
+    """
+    repo_id = repo["id"]
+    repo_vars = {
+        "id": repo_id,
+        "alertDays": bb["bb_alert_days"],
+        "rsyncKeys": [bb["bb_rsync_key_id"]],
+    }
+
+    REPO_EDIT = """
+    mutation repoEdit(
+      $id: String!
+      $name: String
+      $quota: Int
+      $quotaEnabled: Boolean
+      $appendOnlyKeys: [String]
+      $rsyncKeys: [String]
+      $fullAccessKeys: [String]
+      $alertDays: Int
+      $borgVersion: String
+      $region: String
+      ) {
+        repoEdit(
+          id: $id
+          name: $name
+          quota: $quota
+          quotaEnabled: $quotaEnabled
+          appendOnlyKeys: $appendOnlyKeys
+          fullAccessKeys: $fullAccessKeys
+          rsyncKeys: $rsyncKeys
+          alertDays: $alertDays
+          borgVersion: $borgVersion
+          region: $region
+        ) {
+          repoEdited {
+            id
+            name
+            region
+            repoPath
+          }
+        }
+    }
+    """
+
+    logging.debug(repo_vars)
+    res = bb["client"].execute(REPO_EDIT, repo_vars)
+    logging.debug(res)
+    if "errors" in res and len(res["errors"]) > 0:
+        logging.error(f"Failed to update settings for {name}")
+        logging.error(res["errors"])
+        sys.exit(1)
+    return res["data"]
+
+
 def ensure_remote_repos(bb, prefix, local_repos):
     remote_repos = []
     for local in local_repos:
         name = local["name"]
-        remote_repo = f"{prefix}{name}"
-        if not bb_repo_exists(bb["client"], remote_repo):
-            logging.info(f"creating borgbase repo {remote_repo}")
-            bb_create_repo(bb, remote_repo)
-        remote_repo_path = bb_repo_path(bb["client"], remote_repo)
+        remote_repo_name = f"{prefix}{name}"
+        remote_repo = bb_repo(bb["client"], remote_repo_name)
+        if remote_repo is None:
+            logging.info(f"creating borgbase repo {remote_repo_name}")
+            bb_create_repo(bb, remote_repo_name)
+        else:
+            logging.info(f"ensuring borgbase repo settings {remote_repo_name}")
+            bb_update_settings(bb, remote_repo_name, remote_repo)
+
+        remote_repo_path = remote_repo["repoPath"]
         if remote_repo_path is None:
-            logging.error("Remote borgbase repo not found: %s", remote_repo)
+            logging.error("Remote borgbase repo not found: %s", remote_repo_name)
             continue
-        local["remote_name"] = remote_repo
+        local["remote_name"] = remote_repo_name
         local["remote_repo_path"] = remote_repo_path
         remote_repos.append(local)
     return remote_repos
