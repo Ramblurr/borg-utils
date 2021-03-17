@@ -1,5 +1,5 @@
 [borg_cloner]
-# reserved for future use
+hc_check_id = <healthchecks check id here, optional>
 
 [borgbase]
 

@@ -4,6 +4,8 @@ import os.path
 import subprocess
 import logging
 import configparser
+import socket
+import urllib.request
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s"
@@ -13,6 +15,20 @@ from borgbase_api_client.client import GraphQLClient
 from borgbase_api_client.mutations import *
 
 from borg_util import is_borg_repo, enumerate_repos
+
+
+def ping_healthchecks(check_id, extra=None):
+    if not check_id:
+        return
+
+    url = f"https://hc-ping.com/{check_id}"
+    if extra:
+        url = f"{url}/{extra}"
+    try:
+        urllib.request.urlopen(url, timeout=10)
+    except socket.error as e:
+        logging.error(f"healthcheck ping failed")
+        logging.error(e)
 
 
 def bb_list_repos(client):
@@ -174,9 +190,8 @@ def bb_update_settings(bb, name, repo):
     res = bb["client"].execute(REPO_EDIT, repo_vars)
     logging.debug(res)
     if "errors" in res and len(res["errors"]) > 0:
-        logging.error(f"Failed to update settings for {name}")
         logging.error(res["errors"])
-        sys.exit(1)
+        raise RuntimeException(f"Failed to update settings for {name}")
     return res["data"]
 
 
@@ -206,12 +221,10 @@ def ensure_remote_repos(bb, prefix, local_repos):
 def rsync_repo(identity_file, local_repo, remote_repo_no_path):
 
     if local_repo is None or len(local_repo) == 0:
-        logging.error("Local repo path is blank!")
-        sys.exit(1)
+        raise RuntimeException("Local repo path is blank!")
 
     if not is_borg_repo(local_repo):
-        logging.error("Local repo path is not a borg repo!")
-        sys.exit(1)
+        raise RuntimeException("Local repo path is not a borg repo!")
 
     stat_info = os.stat(local_repo)
     uid = stat_info.st_uid
@@ -299,6 +312,7 @@ def parse_config():
         )
     )
     namespaces = []
+    check_id = config["borg_cloner"].get("hc_check_id")
     borgbase = {
         "bb_token": config.get("borgbase", "bb_token"),
         "bb_rsync_key_id": config.get("borgbase", "bb_rsync_key_id"),
@@ -321,13 +335,20 @@ def parse_config():
                 "ignorelist": ignorelist,
             }
         )
-    return {"borgbase": borgbase, "namespaces": namespaces}
+    return {"check_id": check_id, "borgbase": borgbase, "namespaces": namespaces}
 
 
 def main():
     config = parse_config()
-    for c in config["namespaces"]:
-        clone_repos(config["borgbase"], **c)
+    ping_healthchecks(config["check_id"], "start")
+    try:
+        for c in config["namespaces"]:
+            clone_repos(config["borgbase"], **c)
+    except Exception as e:
+        logging.error(e)
+        ping_healthchecks(config["check_id"], "fail")
+
+    ping_healthchecks(config["check_id"])
 
 
 if __name__ == "__main__":
