@@ -73,11 +73,11 @@ _listkeys() {
 
 delkey() {
     username="${1:-}"
-    pubkey_num="${2:}"
+    pubkey_num="${2:-}"
 
     if [[ -z "$username" ]]; then
         echo "Usage: $SCRIPT_NAME delkey USER [num]"
-	echo         to get num use $SCRIPT_NAME listkeys
+        echo to get num use $SCRIPT_NAME listkeys
         exit 0
     fi
     if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
