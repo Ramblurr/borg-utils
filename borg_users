@@ -72,37 +72,36 @@ _listkeys() {
 }
 
 delkey() {
-    username="${1:-}"
-    pubkey_num="${2:-}"
+  username="${1:-}"
+  pubkey_num="${2:-}"
 
-    if [[ -z "$username" ]]; then
-        echo "Usage: $SCRIPT_NAME delkey USER [num]"
-        echo to get num use $SCRIPT_NAME listkeys
-        exit 0
-    fi
-    if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
-       echo invalid user
-       exit 1
-    fi
-    auth_keys=$(realpath "$DEFAULT_DEST"/"$username"/.ssh/authorized_keys)
-    if (( "$(grep -ch "^" "$auth_keys")" == 0 )); then
-        echo "$username has no pubkeys."
-        exit 0
-    fi 
-    if [[ -z "$pubkey_num" ]]; then
-
-        IFS=$'\n'
-        PS3="Pubkey to delete (number or any other to abort): "
-        select line in `_listkeys $auth_keys`; do
-            _delkeyline "$auth_keys" "$line"
-            break
-        done
-        unset IFS
-    else
-        line=$(sed "${pubkey_num}q;d" $auth_keys)
-	echo chose $pubkey_num: $line
-        _delkeylines "$auth_keys" "$line"
-    fi
+  if [[ -z "$username" ]]; then
+    echo "Usage: $SCRIPT_NAME delkey USER [num]"
+    echo to get num use $SCRIPT_NAME listkeys
+    exit 0
+  fi
+  if [[ ! -d $DEFAULT_DEST/"$username" ]]; then
+    echo invalid user
+    exit 1
+  fi
+  auth_keys=$(realpath "$DEFAULT_DEST"/"$username"/.ssh/authorized_keys)
+  if (( "$(grep -ch "^" "$auth_keys")" == 0 )); then
+    echo "$username has no pubkeys."
+    exit 0
+  fi
+  if [[ -z "$pubkey_num" ]]; then
+    IFS=$'\n'
+    PS3="Pubkey to delete (number or any other to abort): "
+    select line in `_listkeys $auth_keys`; do
+      _delkeyline "$auth_keys" "$line"
+      break
+    done
+    unset IFS
+  else
+    line=$(sed "${pubkey_num}q;d" $auth_keys)
+    echo chose $pubkey_num: $line
+    _delkeyline "$auth_keys" "$line"
+  fi
 }
 
 listkeys() {
